@@ -1,5 +1,5 @@
 /** @file lc3vm.h
- * @brief LC-3 VM API
+ *@brief LC-3 VM API
  *
  * @author Student Name
  * @note   cwid: 123456
@@ -131,7 +131,7 @@ void trap(uint16_t i);
 
 // loading and running programs using fetch-decode-execute cycle
 void init(uint16_t offset);
-void check_device_status();
+void check_device_status(void);
 void start(uint16_t offset);
 void ld_img(char* fname);
 
@@ -139,13 +139,21 @@ void ld_img(char* fname);
 // at the bottom of the lc3vm.c file
 
 // task 1 PSR priority/privilege function declarations here
+bool is_user_mode(void);
+void user_mode(void);
+void supervisor_mode(void);
 
+uint16_t priority(void);
+void set_priority(uint16_t p);
 // task 2 stack manipulation function declarations here
-
+void push(uint16_t val);
+void pop(void);
 // task 3 MCR clock latch manipulation
-
+void enable_clock(void);
+void disable_clock(void);
+bool is_running(void);
 // task 7 exceptions
-
+void except(uint16_t vector);
 #ifdef TEST
 } // end extern C for C++ test runner
 #endif

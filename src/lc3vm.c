@@ -48,9 +48,7 @@ uint16_t PC_START = 0x3000;
  *   simply reads and returns the 16 bits stored at the indicated address.
  */
 uint16_t mem_read(uint16_t address)
-{
-  return mem[address];
-}
+{ return mem[address]; }
 
 /** @brief memory write, transfer to memory
  *
@@ -68,9 +66,7 @@ uint16_t mem_read(uint16_t address)
  *   character, or some other type of data.
  */
 void mem_write(uint16_t address, uint16_t val)
-{
-  mem[address] = val;
-}
+{ mem[address] = val; }
 
 /** @brief sign extend bits
  *
@@ -324,9 +320,7 @@ void ldr(uint16_t i)
  *   second source register or the immediate value encoded in the
  */
 void lea(uint16_t i)
-{
-  reg[DR(i)] = reg[RPC] + PCOFF9(i);
-}
+{ reg[DR(i)] = reg[RPC] + PCOFF9(i); }
 
 /** @brief store to PC + offset
  *
@@ -342,9 +336,7 @@ void lea(uint16_t i)
  *   second source register or the immediate value encoded in the
  */
 void st(uint16_t i)
-{
-  mem_write(reg[RPC] + PCOFF9(i), reg[DR(i)]);
-}
+{ mem_write(reg[RPC] + PCOFF9(i), reg[DR(i)]); }
 
 /** @brief store indirect
  *
@@ -361,9 +353,7 @@ void st(uint16_t i)
  *   second source register or the immediate value encoded in the
  */
 void sti(uint16_t i)
-{
-  mem_write(mem_read(reg[RPC] + PCOFF9(i)), reg[DR(i)]);
-}
+{ mem_write(mem_read(reg[RPC] + PCOFF9(i)), reg[DR(i)]); }
 
 /** @brief store offset relative to base address
  *
@@ -379,9 +369,7 @@ void sti(uint16_t i)
  *   second source register or the immediate value encoded in the
  */
 void str(uint16_t i)
-{
-  mem_write(reg[SR1(i)] + OFF6(i), reg[DR(i)]);
-}
+{ mem_write(reg[SR1(i)] + OFF6(i), reg[DR(i)]); }
 
 /** @brief jump unconditionally
  *
@@ -395,9 +383,7 @@ void str(uint16_t i)
  *   second source register or the immediate value encoded in the
  */
 void jmp(uint16_t i)
-{
-  reg[RPC] = reg[SR1(i)];
-}
+{ reg[RPC] = reg[SR1(i)]; }
 
 /** @brief conditional branch
  *
@@ -467,7 +453,23 @@ void jsr(uint16_t i)
  * @param i The instruction.  The bits of the instruction we are
  *   executing.
  */
-void rti(uint16_t i) {}
+void rti(uint16_t i)
+{
+  if (is_user_mode())
+  {
+    except(0x100);
+    return;
+  }
+  reg[PSR] = mem_read(reg[R6]);
+  pop();
+  reg[RPC] = mem_read(reg[R6]);
+  pop();
+  if (is_user_mode())
+  {
+    reg[SSP] = reg[R6];
+    reg[R6] = reg[USP];
+  }
+}
 
 /** @brief reserved
  *
@@ -493,7 +495,21 @@ void res(uint16_t i) {}
  *   executing.  The low 7 bits i[7:0] contain the trap service vector
  *   index to be invoked.
  */
-void trap(uint16_t i) {}
+void trap(uint16_t vector)
+{
+  uint16_t oldPSR = reg[PSR];
+
+  if (is_user_mode())
+  {
+    reg[USP] = reg[R6];
+    reg[R6] = reg[SSP];
+    supervisor_mode();
+  }
+  push(reg[RPC]);
+  push(oldPSR);
+
+  reg[RPC] = mem_read(vector);
+}
 
 /**
  * LC-3 instruction microcode store / lookup table.  Need to define array
@@ -552,6 +568,8 @@ void init(uint16_t offset)
   // start in user mode
   // enable_clock();
   // user_mode();
+  enable_clock();
+  user_mode();
 
   // initialize memory mapped status registers
   iomap[KBSR] = 0x0000; // 0 indicates no key is available yet for a program to read
@@ -588,7 +606,7 @@ void init(uint16_t offset)
  * to receive another character for display from a user
  * program.
  */
-void check_device_status()
+void check_device_status(void)
 {
   // memory mapped keyboard input handling
   // if KBSR bit 15 is 0 that means the machine is ready to read another
@@ -654,7 +672,7 @@ void start(uint16_t offset)
 
   // perform the fetch-decode-execute cycle while the
   // run clock/latch is enabled
-  while (true) // needs to be modified to use is_running() once implemented
+  while (is_running()) // needs to be modified to use is_running() once implemented
   {
     // fetch the next instruction from memory
     uint16_t i = mem_read(reg[RPC]);
@@ -832,3 +850,52 @@ void ld_img(char* fname)
  *   the exception vector number we use to index into the exception service
  *   vector table.
  */
+
+bool is_user_mode(void)
+{ return (reg[PSR] & 0x8000) != 0; }
+void user_mode(void)
+{ reg[PSR] |= 0x8000; }
+void supervisor_mode(void)
+{ reg[PSR] &= ~0x8000; }
+uint16_t priority(void)
+{ return (reg[PSR] >> 8) & 0x7; }
+void set_priority(uint16_t p)
+{
+  reg[PSR] &= ~(0x7 << 8);
+  reg[PSR] |= ((p & 0x7) << 8);
+}
+
+void push(uint16_t val)
+{
+  reg[R6]--;
+  mem_write(reg[R6], val);
+}
+void pop(void)
+{ reg[R6]++; }
+
+void enable_clock(void)
+{
+  reg[MCR] |= 0x8000;
+  mem[MCR_ADDR] = reg[MCR];
+}
+void disable_clock(void)
+{
+  reg[MCR] &= ~0x8000;
+  mem[MCR_ADDR] = reg[MCR];
+}
+bool is_running(void)
+{ return (reg[MCR] & 0x8000) != 0; }
+
+void except(uint16_t vector)
+{
+  uint16_t oldPSR = reg[PSR];
+  if (is_user_mode())
+  {
+    reg[USP] = reg[R6];
+    reg[R6] = reg[SSP];
+    supervisor_mode();
+  }
+  push(reg[RPC]);
+  push(oldPSR);
+  reg[RPC] = mem_read(0x100 + vector);
+}

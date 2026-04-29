@@ -2,7 +2,7 @@
 GCC=gcc
 GCC_FLAGS=-Wall -Werror -pedantic -g -std=c18
 GPP=g++
-GPP_FLAGS=-Wall -Werror -pedantic -g
+GPP_FLAGS=-std=c++11 -Wall -Werror -pedantic -g
 INCLUDES=-Iinclude
 LINKS=
 
