@@ -47,6 +47,7 @@ uint16_t PC_START = 0x3000;
  *   later as something other than an unsigned integer, but this function
  *   simply reads and returns the 16 bits stored at the indicated address.
  */
+
 uint16_t mem_read(uint16_t address)
 { return mem[address]; }
 
@@ -457,7 +458,7 @@ void rti(uint16_t i)
 {
   if (is_user_mode())
   {
-    except(0x100);
+    except(0x00);
     return;
   }
   reg[PSR] = mem_read(reg[R6]);
